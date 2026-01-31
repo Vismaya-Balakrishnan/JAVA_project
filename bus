@@ -1,0 +1,286 @@
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.UUID;
+// --------------------- Bus Class ---------------------
+class Bus {
+private String busNumber;
+private String source;
+private String destination;
+private int totalSeats;
+private boolean[] seats; // true = available, false = booked
+public Bus(String busNumber, String source, String destination, int totalSeats) {
+this.busNumber = busNumber;
+this.source = source;
+this.destination = destination;
+this.totalSeats = totalSeats;
+this.seats = new boolean[totalSeats + 1]; // 1-based indexing
+Arrays.fill(this.seats, true);
+this.seats[0] = false; // index 0 unused
+}
+public String getBusNumber() { return busNumber; }
+public String getSource() { return source; }
+public String getDestination() { return destination; }
+public int getTotalSeats() { return totalSeats; }
+public synchronized boolean bookSeat(int seatNumber) {
+if (seatNumber <= 0 || seatNumber > totalSeats) return false;
+if (!seats[seatNumber]) return false; // already booked
+seats[seatNumber] = false;
+return true;
+}
+public synchronized boolean cancelSeat(int seatNumber) {
+if (seatNumber <= 0 || seatNumber > totalSeats) return false;
+if (seats[seatNumber]) return false; // already available
+seats[seatNumber] = true;
+return true;
+}
+public List<Integer> getAvailableSeats() {
+List<Integer> available = new ArrayList<>();
+for (int i = 1; i <= totalSeats; i++) {
+if (seats[i]) available.add(i);
+}
+return available;
+}
+public boolean matchesRoute(String src, String dest) {
+return this.source.equalsIgnoreCase(src) && this.destination.equalsIgnoreCase(dest);
+}
+@Override
+public String toString() {
+    return String.format(
+"Bus[%s]: %s -> %s, Seats: %d, Available: %d",
+busNumber, source, destination, totalSeats, getAvailableSeats().size()
+);
+}
+}
+// --------------------- Passenger Class ---------------------
+class Passenger {
+private String name;
+private String id;
+private String contact;
+public Passenger(String name, String id, String contact) {
+this.name = name;
+this.id = id;
+this.contact = contact;
+}
+public String getName() { return name; }
+public String getId() { return id; }
+public String getContact() { return contact; }
+@Override
+public String toString() {
+return String.format("%s (ID:%s, Contact:%s)", name, id, contact);
+}
+}
+// --------------------- Ticket Class ---------------------
+class Ticket {
+private String ticketId;
+private Bus bus;
+private int seatNumber;
+private Passenger passenger;
+private LocalDateTime issueTime;
+public Ticket(Bus bus, int seatNumber, Passenger passenger) {
+this.ticketId = UUID.randomUUID().toString();
+this.bus = bus;
+this.seatNumber = seatNumber;
+this.passenger = passenger;
+this.issueTime = LocalDateTime.now();
+}
+public String getTicketId() { return ticketId; }
+public Bus getBus() { return bus; }
+public int getSeatNumber() { return seatNumber; }
+public Passenger getPassenger() { return passenger; }
+public String formatTicket() {
+DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+StringBuilder sb = new StringBuilder();
+sb.append("---- TICKET ----\n");
+sb.append("Ticket ID: ").append(ticketId).append("\n");
+sb.append("Issue Time: ").append(issueTime.format(fmt)).append("\n");
+sb.append("Bus: ").append(bus.getBusNumber()).append(" (" + bus.getSource() + " -> " +
+bus.getDestination() + ")\n");
+sb.append("Seat No: ").append(seatNumber).append("\n");
+sb.append("Passenger: ").append(passenger.toString()).append("\n");
+sb.append("----------------\n");
+return sb.toString();
+}
+@Override
+public String toString() {
+return formatTicket();
+}
+}
+// --------------------- TransportManager Class ---------------------
+class TransportManager {
+private Map<String, Bus> buses;
+private Map<String, Ticket> tickets;
+public TransportManager() {
+this.buses = new HashMap<>();
+this.tickets = new HashMap<>();
+}
+public void addBus(Bus bus) {
+buses.put(bus.getBusNumber(), bus);
+}
+public List<Bus> searchBuses(String source, String destination) {
+List<Bus> results = new ArrayList<>();
+for (Bus b : buses.values()) {
+if (b.matchesRoute(source, destination)) results.add(b);
+}
+return results;
+}
+public Ticket bookTicket(String busNumber, int seatNumber, Passenger passenger) {
+Bus bus = buses.get(busNumber);
+if (bus == null) return null;
+boolean ok = bus.bookSeat(seatNumber);
+if (!ok) return null;
+Ticket t = new Ticket(bus, seatNumber, passenger);
+tickets.put(t.getTicketId(), t);
+return t;
+}
+public boolean cancelTicket(String ticketId) {
+Ticket t = tickets.get(ticketId);
+if (t == null) return false;
+Bus bus = t.getBus();
+boolean ok = bus.cancelSeat(t.getSeatNumber());
+if (!ok) return false;
+tickets.remove(ticketId);
+return true;
+}
+public Ticket getTicket(String ticketId) {
+    return tickets.get(ticketId);
+}
+public Collection<Bus> listAllBuses() {
+return buses.values();
+}
+public Collection<Ticket> listAllTickets() {
+return tickets.values();
+}
+}
+// --------------------- Main Class ---------------------
+public class Main {
+private static TransportManager manager = new TransportManager();
+private static Scanner sc = new Scanner(System.in);
+public static void main(String[] args) {
+preloadData();
+boolean running = true;
+while (running) {
+showMenu();
+String choice = sc.nextLine().trim();
+switch (choice) {
+case "1":
+searchBuses();
+break;
+case "2":
+bookSeat();
+break;
+case "3":
+cancelTicket();
+break;
+case "4":
+printTicket();
+break;
+case "5":
+listBuses();
+break;
+case "6":
+listAllTickets();
+break;
+case "0":
+running = false;
+break;
+default:
+System.out.println("Invalid choice. Try again.");
+}
+}
+System.out.println("Exiting. Goodbye!");
+}
+private static void showMenu() {
+System.out.println("\n--- Bus Reservation System ---");
+System.out.println("1. Search Buses by Route");
+System.out.println("2. Book a Seat");
+System.out.println("3. Cancel Ticket");
+System.out.println("4. Print Ticket Details");
+System.out.println("5. List All Buses");
+System.out.println("6. List All Booked Tickets");
+System.out.println("0. Exit");
+System.out.print("Select: ");
+}
+private static void preloadData() {
+Bus b1 = new Bus("1001", "Bangalore", "Mysore", 40);
+Bus b2 = new Bus("1002", "Bangalore", "Hyderabad", 30);
+Bus b3 = new Bus("1003", "Mysore", "Bangalore", 40);
+manager.addBus(b1);
+manager.addBus(b2);
+manager.addBus(b3);
+}
+private static void searchBuses() {
+System.out.print("Source: ");
+String src = sc.nextLine().trim();
+System.out.print("Destination: ");
+String dest = sc.nextLine().trim();
+List<Bus> found = manager.searchBuses(src, dest);
+if (found.isEmpty()) {
+System.out.println("No buses found for the route.");
+} else {
+System.out.println("Found Buses:");
+for (Bus b : found) {
+System.out.println(b.toString());
+System.out.println("Available seats: " + b.getAvailableSeats());
+}
+}
+}
+private static void bookSeat() {
+System.out.print("Enter Bus Number: ");
+String busNo = sc.nextLine().trim();
+System.out.print("Enter Seat Number: ");
+String seatStr = sc.nextLine().trim();
+int seat;
+try {
+seat = Integer.parseInt(seatStr);
+} catch (NumberFormatException e) {
+System.out.println("Invalid seat number. Please enter a numeric seat number.");
+return;
+}
+System.out.print("Passenger Name: ");
+String name = sc.nextLine().trim();
+System.out.print("Passenger ID: ");
+String id = sc.nextLine().trim();
+System.out.print("Contact: ");
+String contact = sc.nextLine().trim();
+Passenger p = new Passenger(name, id, contact);
+Ticket t = manager.bookTicket(busNo, seat, p);
+if (t == null) {
+    System.out.println("Booking failed. Seat may be taken or bus not found.");
+} else {
+System.out.println("Booking successful! Here is your ticket:\n");
+System.out.println(t.formatTicket());
+}
+}
+private static void cancelTicket() {
+System.out.print("Enter Ticket ID to cancel: ");
+String tid = sc.nextLine().trim();
+boolean ok = manager.cancelTicket(tid);
+if (ok) System.out.println("Ticket cancelled successfully.");
+else System.out.println("Cancellation failed. Ticket not found or already cancelled.");
+}
+private static void printTicket() {
+System.out.print("Enter Ticket ID: ");
+String tid = sc.nextLine().trim();
+Ticket t = manager.getTicket(tid);
+if (t == null) System.out.println("Ticket not found.");
+else System.out.println(t.formatTicket());
+}
+private static void listBuses() {
+System.out.println("All buses in system:");
+for (Bus b : manager.listAllBuses()) {
+System.out.println(b);
+}
+}
+private static void listAllTickets() {
+Collection<Ticket> tickets = manager.listAllTickets();
+if (tickets.isEmpty()) {
+System.out.println("No tickets booked yet.");
+return;
+}
+System.out.println("All Booked Tickets:");
+for (Ticket t : tickets) {
+System.out.println(t.formatTicket());
+}
+}
+}
